@@ -239,7 +239,12 @@ def generate_samples(
 
     samples = None
     # TODO: sample with your method.sample()
-
+    samples = method.sample(
+            num_samples, 
+            image_shape, 
+            **sampling_kwargs
+        )
+    
     if use_ema:
         ema.restore()
 
@@ -260,8 +265,17 @@ def save_samples(
         save_path: File path to save the image grid.
         num_samples: Number of samples, used to calculate grid layout.
     """
+    # 1. Unnormalize: Convert from [-1, 1] back to [0, 1]
+    # We use the helper imported from src.data
+    samples = unnormalize(samples)
 
-    raise NotImplementedError
+    # 2. Calculate a nice grid shape (e.g., 16 samples -> 4x4 grid)
+    grid_nrow = int(math.sqrt(num_samples))
+
+    # 3. Save using your wrapper function
+    save_image(samples, save_path, nrow=grid_nrow)
+    
+    print(f"Saved samples to {save_path}")
 
 
 def train(

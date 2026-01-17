@@ -71,7 +71,7 @@ def _train_impl(
     # Load config
     config_tag = method
     if config_path is None:
-        config_path = f"/root/configs/{method}.yaml"
+        config_path = f"/root/configs/{method}_modal.yaml"
     else:
         config_path = f"/root/{config_path}"
         config_tag = os.path.splitext(os.path.basename(config_path))[0]
@@ -145,7 +145,7 @@ def _train_impl(
 
 
 # Create training functions for different GPU counts
-@app.function(image=image, gpu="L40S:1", timeout=60*60*12, volumes={"/data": volume}, secrets=[modal.Secret.from_name("wandb-api-key")])
+@app.function(image=image, gpu="L40S:1", timeout=60*60*5, volumes={"/data": volume}, secrets=[modal.Secret.from_name("wandb-api-key")])
 def train_1gpu(method: str = "ddpm", config_path: str = None, resume_from: str = None, num_iterations: int = None, batch_size: int = None, learning_rate: float = None, overfit_single_batch: bool = False):
     return _train_impl(method, config_path, resume_from, num_iterations, batch_size, learning_rate, overfit_single_batch)
 
@@ -483,7 +483,7 @@ def main(
         # Read config to determine GPU count
         import yaml
 
-        local_config_path = config or f"configs/{method}.yaml"
+        local_config_path = config or f"configs/{method}_modal.yaml"
         with open(local_config_path, 'r') as f:
             local_config = yaml.safe_load(f)
 
@@ -501,6 +501,11 @@ def main(
                 f"Supported: 1-8"
             )
 
+        if checkpoint is not None:
+            # checkpoint = f"logs/ddpm/ddpm_20260117_060105/checkpoints/{checkpoint}"
+            checkpoint = f"logs/ddpm/ddpm_20260117_073306/checkpoints/{checkpoint}"
+            
+
         result = train_fn.remote(
             method=method,
             config_path=config,
@@ -508,6 +513,7 @@ def main(
             batch_size=batch_size,
             learning_rate=learning_rate,
             overfit_single_batch=overfit_single_batch,
+            resume_from=checkpoint,
         )
         print(result)
     elif action == "sample":
