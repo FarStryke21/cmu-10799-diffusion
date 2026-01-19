@@ -63,7 +63,7 @@ temp/
 .claude/
 
 # Logs
-ddpm_logs/
+volume/
 
 # Datasets
 notebooks/data

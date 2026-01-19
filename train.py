@@ -54,37 +54,74 @@ def load_config(config_path: str) -> dict:
         config = yaml.safe_load(f)
     return config
 
-
 def setup_logging(config: dict, method_name: str) -> tuple[str, Any]:
-    """Set up logging directories and wandb. Returns (log_dir, wandb_run)."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = os.path.join(config['logging']['dir'], f"{method_name}_{timestamp}")
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(os.path.join(log_dir, 'samples'), exist_ok=True)
-    os.makedirs(os.path.join(log_dir, 'checkpoints'), exist_ok=True)
-
-    # Save config
-    with open(os.path.join(log_dir, 'config.yaml'), 'w') as f:
-        yaml.dump(config, f)
-
-    print(f"Logging to: {log_dir}")
-
-    # Initialize wandb if enabled
-    wandb_run = None
+    """Set up logging directories and wandb."""
     wandb_config = config['logging'].get('wandb', {})
+    
+    # 1. Determine Log Directory
+    resume_dir = config['logging'].get('resume_dir')
+    is_resuming = False
+    
+    if resume_dir and os.path.exists(resume_dir):
+        log_dir = resume_dir
+        is_resuming = True
+        print(f"Resuming logging in: {log_dir}")
+        
+        # Try to find existing WandB ID
+        id_file = os.path.join(log_dir, 'wandb_id.txt')
+        if os.path.exists(id_file):
+            with open(id_file, 'r') as f:
+                wandb_config['resume_id'] = f.read().strip()
+    else:
+        # Standard new run
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = os.path.join(config['logging']['dir'], f"{method_name}_{timestamp}")
+        os.makedirs(log_dir, exist_ok=True)
+        os.makedirs(os.path.join(log_dir, 'samples'), exist_ok=True)
+        os.makedirs(os.path.join(log_dir, 'checkpoints'), exist_ok=True)
+        print(f"Logging to: {log_dir}")
+
+    # 2. Save Configuration (MOVED OUTSIDE)
+    # If resuming, save as a new file to preserve history. If new, save as config.yaml.
+    if is_resuming:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        config_name = f'config_resumed_{timestamp}.yaml'
+    else:
+        config_name = 'config.yaml'
+        
+    with open(os.path.join(log_dir, config_name), 'w') as f:
+        yaml.dump(config, f)
+    print(f"Saved configuration to: {os.path.join(log_dir, config_name)}")
+
+    # 3. Initialize WandB
+    wandb_run = None
     if wandb_config.get('enabled', False):
         try:
+            resume_id = wandb_config.get('resume_id')
+            
+            if resume_id:
+                run_id = resume_id
+                resume_mode = "must"
+                print(f"Resuming WandB Run ID: {run_id}")
+            else:
+                run_id = wandb.util.generate_id()
+                resume_mode = "allow"
+
             wandb_run = wandb.init(
                 project=wandb_config.get('project', 'cmu-10799-diffusion'),
                 entity=wandb_config.get('entity', None),
-                name=f"{method_name}_{timestamp}",
+                name=os.path.basename(log_dir),
                 config=config,
                 dir=log_dir,
                 tags=[method_name],
+                id=run_id,
+                resume=resume_mode
             )
-            print(f"Weights & Biases: {wandb_run.url}")
-        except ImportError:
-            print("Warning: wandb not installed. Install with: pip install wandb")
+            
+            if not resume_id:
+                with open(os.path.join(log_dir, 'wandb_id.txt'), 'w') as f:
+                    f.write(wandb_run.id)
+                    
         except Exception as e:
             print(f"Warning: Failed to initialize wandb: {e}")
 
@@ -293,6 +330,9 @@ def train(
         resume_path: Path to checkpoint to resume from
         overfit_single_batch: If True, train on a single batch repeatedly for debugging
     """
+    if resume_path is None:
+        resume_path = config['checkpoint'].get('resume')
+        
     # Auto-detect distributed setup from environment
     rank, world_size, local_rank = get_distributed_context()
 
@@ -327,6 +367,12 @@ def train(
     else:
         use_cuda = torch.cuda.is_available() and config_device != 'cpu'
         device = torch.device('cuda' if use_cuda else 'cpu')
+
+    # Extract resume logging dir if resuming
+    if resume_path:
+        potential_dir = os.path.dirname(os.path.dirname(resume_path))
+        if os.path.exists(os.path.join(potential_dir, 'config.yaml')):
+            config['logging']['resume_dir'] = potential_dir
 
     if is_main_process:
         print("=" * 60)

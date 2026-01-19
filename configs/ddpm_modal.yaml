@@ -21,16 +21,16 @@ model:
 
 # TODO: your training hyperparameters, feel free to add or exclude any of these options
 training:
-  batch_size: 256 # int
+  batch_size: 128 # int
   learning_rate: 0.0002 # float
   weight_decay: 0.00 # float
   betas: [0.9, 0.999] # list of float
   ema_decay: 0.9999 # float
   ema_start: 2000 # int # This is the start iter to use EMA during sampling at training time, as using EMA at the beginning may not be very meaningful
   gradient_clip_norm: 1.0 # float
-  num_iterations: 100000 # int
+  num_iterations: 120000 # int
   log_every: 100 # int
-  sample_every: 2000 # int
+  sample_every: 5000 # int
   save_every: 10000 # int
   num_samples: 16 # int
 # TODO: your ddpm algorithm hyperparameters, feel free to add or exclude any of these options
@@ -46,13 +46,13 @@ sampling:
 infrastructure:
   seed: 42
   device: "cuda"
-  num_gpus: 2 # int # 1 should be ok
+  num_gpus: 1 # int # 1 should be ok
   mixed_precision: true # bool # both true and false should work
   compile_model: false # only tested false
 
 checkpoint:
   dir: "./checkpoints"
-  resume: null
+  resume: "/data/logs/ddpm/ddpm_20260117_195521/checkpoints/ddpm_0090000.pt"  # else None
 
 logging:
   dir: "./logs"
@@ -60,3 +60,4 @@ logging:
     enabled: true
     project: "cmu-10799-diffusion"
     entity: null
+    resume_id: "e8p4w7li"

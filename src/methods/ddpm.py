@@ -197,7 +197,8 @@ class DDPM(BaseMethod):
         self.eval_mode()
 
         x_t = torch.randn((batch_size, *image_shape)).to(self.device)
-        for t in reversed(range(self.num_timesteps)):
+        num_steps = kwargs.get("num_steps", self.num_timesteps)
+        for t in reversed(range(num_steps)):
             t_batch = torch.full((batch_size,), t, dtype=torch.long).to(self.device)
             x_t = self.reverse_process(x_t, t_batch)
 

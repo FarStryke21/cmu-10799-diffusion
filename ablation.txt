@@ -1,0 +1,29 @@
+Timesteps : 1000
+frechet_inception_distance: 20.0441
+kernel_inception_distance_mean: 0.004735324
+kernel_inception_distance_std: 0.0003455777
+
+Timesteps : 900
+frechet_inception_distance: 20.085
+kernel_inception_distance_mean: 0.004826694
+kernel_inception_distance_std: 0.0003359407
+
+Timesteps : 700
+frechet_inception_distance: 23.42122
+kernel_inception_distance_mean: 0.008296671
+kernel_inception_distance_std: 0.0005879366
+
+Timesteps : 500
+frechet_inception_distance: 35.90192
+kernel_inception_distance_mean: 0.01913313
+kernel_inception_distance_std: 0.0007442789
+
+Timesteps : 300
+frechet_inception_distance: 379.3899
+kernel_inception_distance_mean: 0.5058804
+kernel_inception_distance_std: 0.001950402
+
+Timesteps : 100
+frechet_inception_distance: 468.4917
+kernel_inception_distance_mean: 0.6994111
+kernel_inception_distance_std: 0.001959463

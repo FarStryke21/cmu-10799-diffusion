@@ -36,7 +36,7 @@ image = (
         "torch-fidelity>=0.3.0",  # Comprehensive evaluation metrics
     )
     # Copy the local project directory into the image
-    .add_local_dir(".", "/root", ignore=[".git", ".venv*", "venv", "__pycache__", "logs", "checkpoints", "*.md", "docs", "environments", "notebooks"])
+    .add_local_dir(".", "/root", ignore=[".git", ".venv*", "venv", "__pycache__", "logs", "checkpoints", "*.md", "docs", "environments", "notebooks", "volume"])
 )
 
 # Create a persistent volume for checkpoints and data
@@ -145,7 +145,7 @@ def _train_impl(
 
 
 # Create training functions for different GPU counts
-@app.function(image=image, gpu="L40S:1", timeout=60*60*5, volumes={"/data": volume}, secrets=[modal.Secret.from_name("wandb-api-key")])
+@app.function(image=image, gpu="L40S:1", timeout=60*60*12, volumes={"/data": volume}, secrets=[modal.Secret.from_name("wandb-api-key")])
 def train_1gpu(method: str = "ddpm", config_path: str = None, resume_from: str = None, num_iterations: int = None, batch_size: int = None, learning_rate: float = None, overfit_single_batch: bool = False):
     return _train_impl(method, config_path, resume_from, num_iterations, batch_size, learning_rate, overfit_single_batch)
 
@@ -323,6 +323,10 @@ def evaluate_torch_fidelity(
     checkpoint_dir = Path(checkpoint_path).parent
     generated_dir = str(checkpoint_dir / "samples" / "generated")
     cache_dir = str(checkpoint_dir / "samples" / "cache")
+
+    if num_steps:
+        generated_dir = str(checkpoint_dir / f"samples_{num_steps}" / "generated")
+        cache_dir = str(checkpoint_dir / f"samples_{num_steps}" / "cache")
 
     # Prepare dataset path for torch-fidelity
     # torch-fidelity needs actual image files, not Arrow format
@@ -503,7 +507,7 @@ def main(
 
         if checkpoint is not None:
             # checkpoint = f"logs/ddpm/ddpm_20260117_060105/checkpoints/{checkpoint}"
-            checkpoint = f"logs/ddpm/ddpm_20260117_073306/checkpoints/{checkpoint}"
+            checkpoint = f"logs/ddpm/ddpm_20260117_195521/checkpoints/{checkpoint}"
             
 
         result = train_fn.remote(
