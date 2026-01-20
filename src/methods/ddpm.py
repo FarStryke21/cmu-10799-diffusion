@@ -21,12 +21,16 @@ class DDPM(BaseMethod):
         beta_start: float,
         beta_end: float,
         # TODO: Add your own arguments here
+        prediction_type: Literal["epsilon", "sample"] = "epsilon",
     ):
         super().__init__(model, device)
 
         self.num_timesteps = int(num_timesteps)
         self.beta_start = beta_start
         self.beta_end = beta_end
+        self.prediction_type = prediction_type
+
+        print(f"Initializing DDPM with {num_timesteps} timesteps, prediction_type={prediction_type}")
         
         # Create betas schedule
         betas = torch.linspace(beta_start, beta_end, num_timesteps).to(device)  # (T,)
@@ -46,6 +50,15 @@ class DDPM(BaseMethod):
             betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
         )  # (T,)
 
+        # Constants specifically for x0-prediction
+        posterior_mean_coef1 = (
+            betas * torch.sqrt(alphas_cumprod_prev) / (1.0 - alphas_cumprod)
+        )
+        # Coeff 2 (for x_t): sqrt(alpha) * (1 - alpha_bar_prev) / (1 - alpha_bar)
+        posterior_mean_coef2 = (
+            (1.0 - alphas_cumprod_prev) * torch.sqrt(alphas) / (1.0 - alphas_cumprod)
+        )
+
         self.register_buffer("betas", betas)
         self.register_buffer("alphas", alphas)
         self.register_buffer("alphas_cumprod", alphas_cumprod)
@@ -54,6 +67,9 @@ class DDPM(BaseMethod):
         self.register_buffer("sqrt_alphas_cumprod", sqrt_alphas_cumprod)
         self.register_buffer("sqrt_one_minus_alphas_cumprod", sqrt_one_minus_alphas_cumprod)
         self.register_buffer("posterior_variance", posterior_variance)
+
+        self.register_buffer("posterior_mean_coef1", posterior_mean_coef1)
+        self.register_buffer("posterior_mean_coef2", posterior_mean_coef2)
 
     # =========================================================================
     # You can add, delete or modify as many functions as you would like
@@ -127,12 +143,18 @@ class DDPM(BaseMethod):
         x_t = self.forward_process(x0, t, noise)
         
         # Neural Network Prediction
-        noise_pred = self.model(x_t, t)
+        model_output = self.model(x_t, t)
         
-        # Compute Loss (MSE)
-        loss = F.mse_loss(noise_pred, noise)
+        # Switch target based on prediction_type
+        if self.prediction_type == "epsilon":
+            target = noise
+        elif self.prediction_type == "sample":
+            target = x0
+        else:
+            raise ValueError(f"Unknown prediction type: {self.prediction_type}")
         
-        return loss, {"loss": loss.item(), "noise_mse": loss.item()}
+        loss = F.mse_loss(model_output, target)
+        return loss, {"loss": loss.item()}
         
 
     # =========================================================================
@@ -152,27 +174,38 @@ class DDPM(BaseMethod):
         Returns:
             x_prev: Noisy samples at time t-1 (batch_size, channels, height, width)
         """
-        predicted_noise = self.model(x_t, t)
-
-        # Extract coefficients
-        sqrt_recip_alphas_t = self._extract(self.sqrt_recip_alphas, t, x_t.shape)
-        beta_t = self._extract(self.betas, t, x_t.shape)
-        sqrt_one_minus_alphas_cumprod_t = self._extract(self.sqrt_one_minus_alphas_cumprod, t, x_t.shape)
+        model_output = self.model(x_t, t)
         posterior_variance_t = self._extract(self.posterior_variance, t, x_t.shape)
-
-        # mean = (1/sqrt(alpha)) * (x_t - (beta / sqrt(1-alpha_bar)) * eps)
-        model_mean = sqrt_recip_alphas_t * (
-            x_t - (beta_t / sqrt_one_minus_alphas_cumprod_t) * predicted_noise
-        )
+        
+        if self.prediction_type == "epsilon":
+            # Standard DDPM (Predicting Noise)
+            sqrt_recip_alphas_t = self._extract(self.sqrt_recip_alphas, t, x_t.shape)
+            beta_t = self._extract(self.betas, t, x_t.shape)
+            sqrt_one_minus_alphas_cumprod_t = self._extract(self.sqrt_one_minus_alphas_cumprod, t, x_t.shape)
+            
+            # Formula: (x_t - beta/sqrt(1-alpha_bar) * eps) / sqrt(alpha)
+            model_mean = sqrt_recip_alphas_t * (
+                x_t - (beta_t / sqrt_one_minus_alphas_cumprod_t) * model_output
+            )
+            
+        elif self.prediction_type == "sample":
+            # Alternative DDPM (Predicting x0)
+            pred_x0 = model_output
+            # Optional: Clip for stability (helps significantly)
+            pred_x0 = torch.clamp(pred_x0, -1.0, 1.0)
+            
+            coef1 = self._extract(self.posterior_mean_coef1, t, x_t.shape)
+            coef2 = self._extract(self.posterior_mean_coef2, t, x_t.shape)
+            
+            # Formula: coef1 * x0 + coef2 * x_t
+            model_mean = coef1 * pred_x0 + coef2 * x_t
+            
+        else:
+            raise ValueError(f"Unknown prediction type: {self.prediction_type}")
 
         noise = torch.randn_like(x_t)
-
-        # No noise when t=0
-
         mask = (t > 0).float().view(-1, *([1] * (len(x_t.shape) - 1)))
-        
         x_prev = model_mean + mask * torch.sqrt(posterior_variance_t) * noise
-
         return x_prev
 
     @torch.no_grad()
@@ -229,4 +262,5 @@ class DDPM(BaseMethod):
             beta_start=ddpm_config["beta_start"],
             beta_end=ddpm_config["beta_end"],
             # TODO: add your parameters here
+            prediction_type=ddpm_config.get("prediction_type", "epsilon"),
         )

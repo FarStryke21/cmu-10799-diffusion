@@ -28,16 +28,18 @@ training:
   ema_decay: 0.9999 # float
   ema_start: 2000 # int # This is the start iter to use EMA during sampling at training time, as using EMA at the beginning may not be very meaningful
   gradient_clip_norm: 1.0 # float
-  num_iterations: 120000 # int
+  num_iterations: 50000 # int
   log_every: 100 # int
   sample_every: 5000 # int
   save_every: 10000 # int
   num_samples: 16 # int
 # TODO: your ddpm algorithm hyperparameters, feel free to add or exclude any of these options
+
 ddpm:
   num_timesteps: 1000 # int
   beta_start: 0.0001 # float
   beta_end: 0.02 # float
+  prediction_type: "epsilon" # str, either "epsilon" or "x0"
 
 sampling:
   num_steps: 1000 # int
@@ -52,7 +54,7 @@ infrastructure:
 
 checkpoint:
   dir: "./checkpoints"
-  resume: "/data/logs/ddpm/ddpm_20260117_195521/checkpoints/ddpm_0090000.pt"  # else None
+  resume: False  # else None
 
 logging:
   dir: "./logs"
@@ -60,4 +62,4 @@ logging:
     enabled: true
     project: "cmu-10799-diffusion"
     entity: null
-    resume_id: "e8p4w7li"
+    # resume_id: None # Only set this if you want to resume a wandb run

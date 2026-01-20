@@ -59,7 +59,7 @@ def setup_logging(config: dict, method_name: str) -> tuple[str, Any]:
     wandb_config = config['logging'].get('wandb', {})
     
     # 1. Determine Log Directory
-    resume_dir = config['logging'].get('resume_dir')
+    resume_dir = config['logging'].get('resume_dir', False)
     is_resuming = False
     
     if resume_dir and os.path.exists(resume_dir):
@@ -332,6 +332,8 @@ def train(
     """
     if resume_path is None:
         resume_path = config['checkpoint'].get('resume')
+        if resume_path is False:
+            resume_path = None
         
     # Auto-detect distributed setup from environment
     rank, world_size, local_rank = get_distributed_context()
