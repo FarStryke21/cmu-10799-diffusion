@@ -250,8 +250,6 @@ class CelebADataset(Dataset):
         # 2. Data Augmentation (Train split only)
         if self.augment and self.split == "train":
             transform_list.append(transforms.RandomHorizontalFlip(p=0.5))
-            # transform_list.append(transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1))
-            # transform_list.append(transforms.RandomRotation(degrees=10))
 
         # 3. Convert to Tensor
         transform_list.append(transforms.ToTensor())
