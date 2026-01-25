@@ -1,0 +1,65 @@
+Original Flow Matching Model Evaluate metrics
+frechet_inception_distance: 19.83889
+kernel_inception_distance_mean: 0.003977416
+kernel_inception_distance_std: 0.0002603464
+
+DDIM Q4b
+kernel_inception_distance_mean: 0.006804693
+kernel_inception_distance_std: 0.0003628672
+
+Ablations Q5a
+Step 1:
+Flow Matching:
+    kernel_inception_distance_mean: 0.2641296
+    kernel_inception_distance_std: 0.001878754
+DDIM:
+    kernel_inception_distance_mean: 0.6397875
+    kernel_inception_distance_std: 0.002048312
+
+Step 5:
+Flow Matching:
+    kernel_inception_distance_mean: 0.03469851
+    kernel_inception_distance_std: 0.0009488659
+DDIM:
+    kernel_inception_distance_mean: 0.02707192
+    kernel_inception_distance_std: 0.0007565077 
+
+Step 10:
+Flow Matching:
+    kernel_inception_distance_mean: 0.01738662
+    kernel_inception_distance_std: 0.0005696988
+DDIM:
+    kernel_inception_distance_mean: 0.01470908
+    kernel_inception_distance_std: 0.0005320618
+
+Step 50:
+Flow Matching:
+    kernel_inception_distance_mean: 0.005744908
+    kernel_inception_distance_std: 0.0003077296
+DDIM:
+    kernel_inception_distance_mean: 0.008388946
+    kernel_inception_distance_std: 0.0004161189
+
+Step 100:
+Flow Matching:
+    kernel_inception_distance_mean: 0.004224975
+    kernel_inception_distance_std: 0.0002747347
+DDIM:
+    kernel_inception_distance_mean: 0.00686219
+    kernel_inception_distance_std: 0.0003641209
+
+Step 200:
+Flow Matching:
+    kernel_inception_distance_mean: 0.003779898
+    kernel_inception_distance_std: 0.0002626111
+DDIM:
+    kernel_inception_distance_mean: 0.004132688
+    kernel_inception_distance_std: 0.0002639438
+
+Step 1000:
+Flow Matching:
+    kernel_inception_distance_mean: 0.002726858
+    kernel_inception_distance_std: 0.0002471572
+DDIM:
+    kernel_inception_distance_mean: 0.002003424
+    kernel_inception_distance_std: 0.0002263963

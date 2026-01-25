@@ -209,33 +209,98 @@ class DDPM(BaseMethod):
         return x_prev
 
     @torch.no_grad()
+    def ddim_step(
+        self,
+        x_t: torch.Tensor,
+        t: int,
+        t_prev: int,
+        eta: float = 0.0
+    ) -> torch.Tensor:
+        """
+        One step of DDIM.
+        
+        Args:
+            x_t: Current sample
+            t: Current timestep (integer)
+            t_prev: Next timestep (integer)
+            eta: Weight of noise (0.0 = Deterministic DDIM, 1.0 = DDPM)
+        """
+        # Get model prediction
+        t_tensor = torch.full((x_t.shape[0],), t, device=self.device, dtype=torch.long)
+        model_output = self.model(x_t, t_tensor)
+        alpha_cumprod_t = self._extract(self.alphas_cumprod, t_tensor, x_t.shape)
+        
+        if t_prev >= 0:
+            t_prev_tensor = torch.full((x_t.shape[0],), t_prev, device=self.device, dtype=torch.long)
+            alpha_cumprod_prev = self._extract(self.alphas_cumprod, t_prev_tensor, x_t.shape)
+        else:
+            alpha_cumprod_prev = torch.ones_like(alpha_cumprod_t)
+
+        # formula: x0 = (x_t - sqrt(1 - alpha_t) * eps) / sqrt(alpha_t)
+        sqrt_one_minus_alpha_cumprod_t = torch.sqrt(1.0 - alpha_cumprod_t)
+        sqrt_alpha_cumprod_t = torch.sqrt(alpha_cumprod_t)
+        
+        if self.prediction_type == "epsilon":
+            epsilon = model_output
+            pred_x0 = (x_t - sqrt_one_minus_alpha_cumprod_t * epsilon) / sqrt_alpha_cumprod_t
+        else: # "sample"
+            pred_x0 = model_output
+            epsilon = (x_t - sqrt_alpha_cumprod_t * pred_x0) / sqrt_one_minus_alpha_cumprod_t
+
+        # Clip x0 for stability
+        pred_x0 = torch.clamp(pred_x0, -1.0, 1.0)
+        sigma_t = eta * torch.sqrt(
+            (1 - alpha_cumprod_prev) / (1 - alpha_cumprod_t) * (1 - alpha_cumprod_t / alpha_cumprod_prev)
+        )
+
+        # Direction pointing to x_t -> dir = sqrt(1 - alpha_prev - sigma^2) * epsilon
+        dir_xt = torch.sqrt(1.0 - alpha_cumprod_prev - sigma_t**2) * epsilon
+
+        noise = torch.randn_like(x_t)
+        x_prev = torch.sqrt(alpha_cumprod_prev) * pred_x0 + dir_xt + sigma_t * noise
+        
+        return x_prev
+
+
+    @torch.no_grad()
     def sample(
         self,
         batch_size: int,
         image_shape: Tuple[int, int, int],
-        # TODO: add your arguments here
+        num_steps: Optional[int] = None,
+        sampler: str = "ddpm",  # <--- NEW ARGUMENT
         **kwargs
     ) -> torch.Tensor:
         """
-        TODO: Implement DDPM sampling loop: start from pure noise, iterate through all the time steps using reverse_process()
-
-        Args:
-            batch_size: Number of samples to generate
-            image_shape: Shape of each image (channels, height, width)
-            **kwargs: Additional method-specific arguments (e.g., num_steps)
-        
-        Returns:
-            samples: Generated samples of shape (batch_size, *image_shape)
+        Generate samples using either DDPM or DDIM.
         """
         self.eval_mode()
+        x = torch.randn((batch_size, *image_shape), device=self.device)
+        
+        if num_steps is None:
+            num_steps = self.num_timesteps
 
-        x_t = torch.randn((batch_size, *image_shape)).to(self.device)
-        num_steps = kwargs.get("num_steps", self.num_timesteps)
-        for t in reversed(range(num_steps)):
-            t_batch = torch.full((batch_size,), t, dtype=torch.long).to(self.device)
-            x_t = self.reverse_process(x_t, t_batch)
+        if sampler == "ddim":
+            skip = self.num_timesteps // num_steps
+            time_seq = list(range(0, self.num_timesteps, skip))
+            
+            time_seq = list(reversed(time_seq))
+            
+            for i, t in enumerate(time_seq):
+                if i < len(time_seq) - 1:
+                    t_prev = time_seq[i+1]
+                else:
+                    t_prev = -1
 
-        return x_t
+                x = self.ddim_step(x, t, t_prev, eta=0.0)
+                
+        else:
+            # Standard DDPM 
+            for t in reversed(range(self.num_timesteps)):
+                t_batch = torch.full((batch_size,), t, device=self.device, dtype=torch.long)
+                x = self.reverse_process(x, t_batch)
+
+        return x
 
     # =========================================================================
     # Device / state

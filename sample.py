@@ -91,7 +91,7 @@ def main():
     parser.add_argument('--checkpoint', type=str, required=True,
                        help='Path to model checkpoint')
     parser.add_argument('--method', type=str, required=True,
-                       choices=['ddpm'], # You can add more later
+                       choices=['ddpm', 'flow_matching' ], # You can add more later
                        help='Method used for training (currently only ddpm is supported)')
     parser.add_argument('--num_samples', type=int, default=64,
                        help='Number of samples to generate')
@@ -116,6 +116,10 @@ def main():
     parser.add_argument('--device', type=str, default='cuda',
                        help='Device to use')
     
+    parser.add_argument('--sampler', type=str, default='ddpm',
+                       choices=['ddpm', 'ddim', 'euler'],
+                       help='Sampler to use (ddpm, ddim, euler)')
+    
     args = parser.parse_args()
     
     # Setup device
@@ -135,6 +139,9 @@ def main():
     # Create method
     if args.method == 'ddpm':
         method = DDPM.from_config(model, config, device)
+    elif args.method == 'flow_matching':  # <--- NEW
+        from src.methods import FlowMatching
+        method = FlowMatching(model, device)
     else:
         raise ValueError(f"Unknown method: {args.method}. Only 'ddpm' is currently supported.")
     
@@ -173,6 +180,7 @@ def main():
                 batch_size=batch_size,
                 image_shape=image_shape,
                 num_steps=num_steps,
+                sampler=args.sampler,
                 # TODO: add your arugments here
             )
 
@@ -199,7 +207,7 @@ def main():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             args.output = f"samples_{timestamp}.png"
 
-        save_samples(all_samples, args.output, nrow=8)
+        save_samples(all_samples, args.output, args.num_samples)
         print(f"Saved grid to {args.output}")
     else:
         print(f"Saved {args.num_samples} individual images to {args.output_dir}")

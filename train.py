@@ -459,6 +459,9 @@ def train(
         print(f"Creating {method_name}...")
     if method_name == 'ddpm':
         method = DDPM.from_config(model, config, device)
+    elif method_name == 'flow_matching': 
+        from src.methods import FlowMatching
+        method = FlowMatching(model, device)
     else:
         raise ValueError(f"Unknown method: {method_name}. Only 'ddpm' is currently supported.")
 
@@ -720,7 +723,7 @@ def train(
 def main():
     parser = argparse.ArgumentParser(description='Train diffusion models')
     parser.add_argument('--method', type=str, required=True,
-                       choices=['ddpm'], # You can add more later
+                       choices=['ddpm', 'flow_matching'], # You can add more later
                        help='Method to train (currently only ddpm is supported)')
     parser.add_argument('--config', type=str, required=True,
                        help='Path to config file (e.g., configs/ddpm.yaml)')
