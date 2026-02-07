@@ -100,7 +100,7 @@ if [ ! -f "$REQ_FILE" ]; then
 fi
 
 # Create virtual environment
-VENV_DIR=".venv-${ENV_TYPE}"
+VENV_DIR=".venv-${ENV_TYPE}-pc"
 if [ -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}Virtual environment already exists at $VENV_DIR${NC}"
     read -p "Delete and recreate? (y/N) " -n 1 -r
@@ -121,7 +121,12 @@ python3 -m venv "$VENV_DIR"
 
 # Activate virtual environment
 echo "Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
+# Check if running on Windows (Git Bash/MSYS)
+if [ -f "$VENV_DIR/Scripts/activate" ]; then
+    source "$VENV_DIR/Scripts/activate"
+else
+    source "$VENV_DIR/bin/activate"
+fi
 
 # Upgrade pip
 echo "Upgrading pip..."
@@ -155,7 +160,11 @@ echo "==============================================${NC}"
 echo ""
 echo "To activate this environment in the future, run:"
 echo ""
-echo "  source $VENV_DIR/bin/activate"
+if [ -f "$VENV_DIR/Scripts/activate" ]; then
+    echo "  source $VENV_DIR/Scripts/activate"
+else
+    echo "  source $VENV_DIR/bin/activate"
+fi
 echo ""
 if [ "$ENV_TYPE" = "cpu" ]; then
     echo "For GPU training, use Modal:"
