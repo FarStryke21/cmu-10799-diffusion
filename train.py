@@ -582,15 +582,16 @@ def train(
                 data_iter = iter(dataloader)
                 batch = next(data_iter)
 
-            if isinstance(batch, (tuple, list)):
-                batch = batch[0]  # Handle (image, label) tuples
+            # Commenting out when we need to handle labels for conditional generation
+            # if isinstance(batch, (tuple, list)):
+            #     batch = batch[0]  # Handle (image, label) tuples
 
-            batch = batch.to(device)
+            # batch = batch.to(device)
         
         # Forward pass with mixed precision
         optimizer.zero_grad()
         
-        with autocast(device_type, enabled=config['infrastructure']['mixed_precision']):
+        with autocast(device_type, dtype=torch.bfloat16, enabled=config['infrastructure']['mixed_precision']):
             loss, metrics = method.compute_loss(batch)
         
         # Backward pass

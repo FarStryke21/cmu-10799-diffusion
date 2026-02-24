@@ -30,6 +30,7 @@ image = (
         "pyyaml>=6.0",
         "einops>=0.6.0",
         "tqdm>=4.64.0",
+        "pandas>=1.3.0",
         "scipy>=1.9.0",
         "wandb>=0.15.0",
         "datasets>=2.0.0",  # For HuggingFace Hub dataset loading
@@ -145,7 +146,7 @@ def _train_impl(
 
 
 # Create training functions for different GPU counts
-@app.function(image=image, gpu="L40S:1", timeout=60*60*12, volumes={"/data": volume}, secrets=[modal.Secret.from_name("wandb-api-key")])
+@app.function(image=image, gpu="L40S:1", timeout=60*60*16, volumes={"/data": volume}, secrets=[modal.Secret.from_name("wandb-api-key")])
 def train_1gpu(method: str = "ddpm", config_path: str = None, resume_from: str = None, num_iterations: int = None, batch_size: int = None, learning_rate: float = None, overfit_single_batch: bool = False):
     return _train_impl(method, config_path, resume_from, num_iterations, batch_size, learning_rate, overfit_single_batch)
 
@@ -206,6 +207,8 @@ def sample(
     num_samples: int = None,
     num_steps: int = None,
     sampler: str = None,
+    attr: str = None,
+    cfg_scale: float = None,
 ):
     """
     Generate samples from a trained model.
@@ -219,7 +222,9 @@ def sample(
     # Set up paths
     checkpoint_path = f"/data/{checkpoint}"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = f"/data/samples/{method}_{timestamp}.png"
+    # We save to a specific filename so we can read it back easily
+    output_filename = f"{method}_{timestamp}.png"
+    output_path = f"/data/samples/{output_filename}"
 
     os.makedirs("/data/samples", exist_ok=True)
 
@@ -239,6 +244,12 @@ def sample(
     if sampler is not None:
         cmd.extend(["--sampler", sampler])
 
+    if attr is not None:
+        cmd.extend(["--attr", attr])
+    if cfg_scale is not None:
+        cmd.extend(["--cfg_scale", str(cfg_scale)])
+
+    print(f"Running sampling command: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
     volume.commit()
 
@@ -480,6 +491,8 @@ def main(
     overfit_single_batch: bool = False,
     override: bool = False,
     sampler: str = None,
+    attr: str = None,
+    cfg_scale: float = 1.5,
 ):
     """
     Main entry point for Modal CLI.
@@ -515,7 +528,7 @@ def main(
 
         if checkpoint is not None:
             # checkpoint = f"logs/ddpm/ddpm_20260117_060105/checkpoints/{checkpoint}"
-            checkpoint = f"logs/ddpm/ddpm_20260117_195521/checkpoints/{checkpoint}"
+            checkpoint = f"./logs/flow_matching_modal/flow_matching_20260208_060736/checkpoints/flow_matching_0050000.pt" # Set to path (e.g., "./logs/.../checkpoints/") "
             
 
         result = train_fn.remote(
@@ -537,6 +550,8 @@ def main(
             num_samples=num_samples,
             num_steps=num_steps,
             sampler=sampler,
+            attr=attr,
+            cfg_scale=cfg_scale,
         )
         print(result)
     elif action == "evaluate" or action == "evaluate_torch_fidelity":

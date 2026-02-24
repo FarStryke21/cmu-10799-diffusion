@@ -22,6 +22,9 @@ from torchvision.utils import make_grid as torch_make_grid
 from torchvision.utils import save_image as torch_save_image
 from PIL import Image
 
+import pandas as pd
+import numpy as np
+
 
 class CelebADataset(Dataset):
     """
@@ -58,6 +61,9 @@ class CelebADataset(Dataset):
 
         # Build transforms
         self.transform = self._build_transforms() # TODO write your own image transform function
+        
+        # For the attributes
+        self.attr = None
 
         # Load dataset based on mode
         if from_hub:
@@ -131,6 +137,33 @@ class CelebADataset(Dataset):
 
         print(f"Loaded {len(self.data)} images from {hf_split} split")
 
+        print("Extracting attributes from Arrow dataset...")
+        
+        # 1. Identify Attribute Columns
+        all_cols = self.dataset.column_names if hasattr(self.dataset, 'column_names') else list(self.dataset[0].keys())
+        attr_cols = [c for c in all_cols if c not in ['image', 'image_id']]
+        attr_cols.sort()
+        self.attr_names = attr_cols 
+        
+        if not attr_cols:
+            print("Warning: No attribute columns found in dataset!")
+            self.attr = None
+            return
+
+        # 2. Extract and Stack
+        try:
+            attr_lists = [self.dataset[col] for col in attr_cols]
+            self.attr = torch.tensor(attr_lists, dtype=torch.float32).t()
+
+            if self.attr.min() < 0:
+                self.attr = (self.attr + 1) // 2
+                
+            print(f"✓ Loaded {self.attr.shape[1]} attributes for {len(self.attr)} images (Arrow mode)")
+            
+        except Exception as e:
+            print(f"Warning: Failed to extract attributes from Arrow: {e}")
+            self.attr = None
+
     def _load_from_local(self):
         """Load dataset from local directory."""
         from pathlib import Path
@@ -160,6 +193,52 @@ class CelebADataset(Dataset):
         else:
             split_path = Path(self.root) / split_dir
             self.data = self._load_split_data(split_path)
+
+        split_dir = "validation" if self.split == "valid" else self.split
+        attr_path = Path(self.root) / split_dir / "attributes.csv"
+        self.attr = None
+        
+        if attr_path.exists():
+            print(f"Loading attributes from {attr_path}...")
+            try:
+                # Read CSV. The downloader sets 'image_id' as the index.
+                df = pd.read_csv(attr_path)
+                
+                # Ensure image_id is the index for fast lookup
+                if 'image_id' in df.columns:
+                    df = df.set_index('image_id')
+                
+                vals = df.values
+                if vals.min() < 0:
+                     vals = (vals + 1) // 2
+                
+                # Create dictionary: filename -> tensor
+                filename_to_attr = {
+                    fname: torch.tensor(vec, dtype=torch.float32) 
+                    for fname, vec in zip(df.index, vals)
+                }
+                
+                # Match attributes to the images in self.data
+                self.attr = []
+                for item in self.data:
+                    fname = item['image_id']
+                    
+                    if fname in filename_to_attr:
+                        self.attr.append(filename_to_attr[fname])
+                    else:
+
+                        fname_swap = fname.replace('.jpg', '.png') if '.jpg' in fname else fname.replace('.png', '.jpg')
+                        if fname_swap in filename_to_attr:
+                            self.attr.append(filename_to_attr[fname_swap])
+                        else:
+                            self.attr.append(torch.zeros(40, dtype=torch.float32))
+                
+                print(f"✓ Loaded attributes for {len(self.attr)} images")
+                
+            except Exception as e:
+                print(f"Warning: Failed to load attributes CSV: {e}")
+        else:
+            print(f"Warning: Attribute file not found at {attr_path}")
 
         print(f"Loaded {len(self.data)} images from local directory")
 
@@ -286,11 +365,16 @@ class CelebADataset(Dataset):
             # Local mode: load from file path
             image = Image.open(item["image"]).convert("RGB")
 
+        if self.attr is not None:
+            labels = self.attr[idx]
+        else:
+            labels = torch.zeros(40, dtype=torch.float32)
+
         # Apply transforms
         if self.transform:
             image = self.transform(image)
 
-        return image
+        return image, labels
 
 
 def create_dataloader(

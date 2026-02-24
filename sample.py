@@ -37,6 +37,47 @@ from src.data import save_image, unnormalize
 from src.methods import DDPM
 from src.utils import EMA
 
+# CelebA Attributes (Must match the dataset order exactly)
+CELEBA_ATTRIBUTES = [
+    '5_o_Clock_Shadow', 'Arched_Eyebrows', 'Attractive', 'Bags_Under_Eyes', 'Bald',
+    'Bangs', 'Big_Lips', 'Big_Nose', 'Black_Hair', 'Blond_Hair', 'Blurry',
+    'Brown_Hair', 'Bushy_Eyebrows', 'Chubby', 'Double_Chin', 'Eyeglasses',
+    'Goatee', 'Gray_Hair', 'Heavy_Makeup', 'High_Cheekbones', 'Male',
+    'Mouth_Slightly_Open', 'Mustache', 'Narrow_Eyes', 'No_Beard', 'Oval_Face',
+    'Pale_Skin', 'Pointy_Nose', 'Receding_Hairline', 'Rosy_Cheeks', 'Sideburns',
+    'Smiling', 'Straight_Hair', 'Wavy_Hair', 'Wearing_Earrings', 'Wearing_Hat',
+    'Wearing_Lipstick', 'Wearing_Necklace', 'Wearing_Necktie', 'Young'
+]
+
+def parse_attributes(attr_str: str, device: torch.device, batch_size: int) -> torch.Tensor:
+    """
+    Parse a comma-separated string of attributes into a batch tensor.
+    Example: "Male,Smiling" -> Tensor of shape (B, 40) with 1s at indices 20 and 31.
+    """
+    # Start with all zeros (neutral)
+    labels = torch.zeros((batch_size, 40), device=device)
+    
+    if not attr_str or attr_str.lower() == "none":
+        return None # Let the method handle random sampling
+        
+    requested = [x.strip() for x in attr_str.split(",")]
+    
+    print(f"Requested attributes: {requested}")
+    
+    for req in requested:
+        # Find the index (case-insensitive)
+        found = False
+        for i, name in enumerate(CELEBA_ATTRIBUTES):
+            if req.lower() == name.lower():
+                labels[:, i] = 1.0
+                found = True
+                break
+        
+        if not found:
+            print(f"Warning: Attribute '{req}' not found in CelebA list. Ignoring.")
+            
+    return labels
+
 
 def load_checkpoint(checkpoint_path: str, device: torch.device):
     """Load checkpoint and return model, config, and EMA."""
@@ -105,6 +146,10 @@ def main():
                        help='Batch size for generation')
     parser.add_argument('--seed', type=int, default=None,
                        help='Random seed for reproducibility')
+    parser.add_argument('--attr', type=str, default=None,
+                       help='Comma-separated list of attributes (e.g. "Male,Smiling,Eyeglasses")')
+    parser.add_argument('--cfg_scale', type=float, default=4.0,
+                       help='Classifier-Free Guidance scale (higher = stronger adherence)')
     
     # Sampling arguments
     parser.add_argument('--num_steps', type=int, default=None,
@@ -158,6 +203,10 @@ def main():
     data_config = config['data']
     image_shape = (data_config['channels'], data_config['image_size'], data_config['image_size'])
     
+    label_tensor = None
+    if args.attr:
+        label_tensor = parse_attributes(args.attr, device, args.batch_size)
+    
     # Generate samples
     print(f"Generating {args.num_samples} samples...")
 
@@ -181,6 +230,8 @@ def main():
                 image_shape=image_shape,
                 num_steps=num_steps,
                 sampler=args.sampler,
+                labels=label_tensor,     
+                cfg_scale=args.cfg_scale,
                 # TODO: add your arugments here
             )
 

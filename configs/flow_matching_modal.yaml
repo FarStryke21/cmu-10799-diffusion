@@ -10,23 +10,23 @@ data:
   augment: true
 
 model:
-  base_channels: 64
+  base_channels: 128
   channel_mult: [1, 2, 2, 4]
   num_res_blocks: 2
   attention_resolutions: [16, 8]
-  num_heads: 4
+  num_heads: 8
   dropout: 0.1
   use_scale_shift_norm: true
 
 training:
-  batch_size: 128
+  batch_size: 64
   learning_rate: 0.0002
   weight_decay: 0.00
   betas: [0.9, 0.999]
   ema_decay: 0.9999
   ema_start: 2000
   gradient_clip_norm: 1.0 # Important: Keep this for Flow Matching stability!
-  num_iterations: 120000
+  num_iterations: 100000
   log_every: 100
   sample_every: 5000
   save_every: 10000
@@ -39,18 +39,18 @@ sampling:
 infrastructure:
   seed: 42
   device: "cuda"
-  num_gpus: 1
+  num_gpus: 2
   mixed_precision: true
   compile_model: false
 
 checkpoint:
   dir: "./checkpoints"
-  resume: False # Set to path (e.g., "./logs/.../checkpoints/") 
+  resume: "/data/logs/flow_matching_modal/flow_matching_20260208_060736/checkpoints/flow_matching_0050000.pt" # Set to path (e.g., "./logs/.../checkpoints/") 
 
 logging:
   dir: "./logs"
   wandb:
     enabled: true
-    project: "cmu-10799-hw2-fm" # Suggest using a new project or tag for HW2
+    project: "cmu-10799-hw3-control" # Suggest using a new project or tag for HW3
     entity: null
-    # resume_id: null # Will be auto-filled by train.py if resuming from a directory
+    resume_id: "w5lsutjy" # Will be auto-filled by train.py if resuming from a directory

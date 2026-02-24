@@ -77,6 +77,7 @@ class UNet(nn.Module):
         num_heads: int = 4,
         dropout: float = 0.1,
         use_scale_shift_norm: bool = True,
+        num_classes: int = 40,
     ):
         super().__init__()
         
@@ -89,13 +90,17 @@ class UNet(nn.Module):
         self.num_heads = num_heads
         self.dropout = dropout
         self.use_scale_shift_norm = use_scale_shift_norm
-        
+        self.num_classes = num_classes
+
         # TODO: build your own unet architecture here
         # Pro tips: remember to take care of the time embeddings!
         # 1. Time Embedding MLP
         # Maps time scalar -> vector of size 4*base_channels
         time_embed_dim = base_channels * 4
         self.time_embedding = TimestepEmbedding(time_embed_dim)
+
+        self.label_embedding = nn.Linear(num_classes, time_embed_dim)
+        self.null_label_emb = nn.Parameter(torch.randn(time_embed_dim))
 
         # 2. Initial Convolution
         self.head = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
@@ -184,7 +189,11 @@ class UNet(nn.Module):
         nn.init.zeros_(self.out[-1].weight)
         nn.init.zeros_(self.out[-1].bias)
     
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, 
+                    t: torch.Tensor, 
+                    y: Optional[torch.Tensor] = None, 
+                    context_mask: Optional[torch.Tensor] = None
+                ) -> torch.Tensor:
         """
         TODO: Implement the forward pass of the unet
         
@@ -192,6 +201,8 @@ class UNet(nn.Module):
             x: Input tensor of shape (batch_size, in_channels, height, width)
                This is typically the noisy image x_t
             t: Timestep tensor of shape (batch_size,)
+            y: Attribute labels (B, num_classes)
+            context_mask: Boolean mask (B,). True indicates "Drop Label" (Unconditional).
 
         Returns:
             Output tensor of shape (batch_size, out_channels, height, width)
@@ -200,6 +211,18 @@ class UNet(nn.Module):
         # 1. Time Embedding
         t_emb = self.time_embedding(t)
         
+        if y is not None:
+            # Project the binary labels to embedding dimension
+            c_emb = self.label_embedding(y.float())
+
+            # Apply Classifier-Free Guidance Masking
+            if context_mask is not None:
+                mask_expanded = context_mask.unsqueeze(1) 
+                null_expanded = self.null_label_emb.unsqueeze(0).expand(x.shape[0], -1)
+                c_emb = torch.where(mask_expanded, null_expanded, c_emb)
+        
+            t_emb = t_emb + c_emb
+
         # 2. Initial Conv
         h = self.head(x)
         
@@ -270,6 +293,7 @@ def create_model_from_config(config: dict) -> UNet:
         num_heads=model_config['num_heads'],
         dropout=model_config['dropout'],
         use_scale_shift_norm=model_config['use_scale_shift_norm'],
+        num_classes=data_config.get('num_classes', 40)
     )
 
 

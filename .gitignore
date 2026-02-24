@@ -67,3 +67,4 @@ volume/
 
 # Datasets
 notebooks/data
+generated/
